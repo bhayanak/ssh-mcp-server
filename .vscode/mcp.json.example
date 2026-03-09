@@ -2,7 +2,7 @@
   "servers": {
     "ssh-mcp": {
       "type": "stdio",
-      "command": "ssh-mcp-server"
+      "command": "ssh-mcp-server-copilot"
     }
   }
 }

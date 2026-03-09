@@ -13,8 +13,6 @@ pip install ssh-mcp-server-copilot
 ssh-mcp-server-copilot init
 ```
 
-- **Python 3.11+** must be installed
-- **ssh-agent** must be running with your SSH keys loaded
 
 ## Setup
 

@@ -21,7 +21,7 @@ from .config import default_config_dir
 
 def _get_version() -> str:
     try:
-        return importlib.metadata.version("ssh-mcp-server")
+        return importlib.metadata.version("ssh-mcp-server-copilot")
     except importlib.metadata.PackageNotFoundError:
         return "0.0.0-dev"
 
@@ -74,18 +74,18 @@ def cmd_init(args: argparse.Namespace) -> None:
     print('       "servers": {')
     print('         "ssh-mcp": {')
     print('           "type": "stdio",')
-    print('           "command": "ssh-mcp-server"')
+    print('           "command": "ssh-mcp-server-copilot"')
     print('         }')
     print('       }')
     print('     }')
     print()
-    print("  Or add to VS Code User Settings (JSON) to enable globally:")
+    print("  Or enable globally \u2014 add to VS Code User Settings (JSON):")
     print()
     print('     "mcp": {')
     print('       "servers": {')
     print('         "ssh-mcp": {')
     print('           "type": "stdio",')
-    print('           "command": "ssh-mcp-server"')
+    print('           "command": "ssh-mcp-server-copilot"')
     print('         }')
     print('       }')
     print('     }')
@@ -109,11 +109,11 @@ def cmd_run(args: argparse.Namespace) -> None:
 def cli() -> None:
     """Main CLI entry point."""
     parser = argparse.ArgumentParser(
-        prog="ssh-mcp-server",
+        prog="ssh-mcp-server-copilot",
         description="Hardened SSH MCP server for VS Code Copilot Chat",
     )
     parser.add_argument(
-        "--version", action="version", version=f"ssh-mcp-server {_get_version()}"
+        "--version", action="version", version=f"ssh-mcp-server-copilot {_get_version()}"
     )
     parser.add_argument(
         "--config-dir",
