@@ -28,10 +28,6 @@ config/hosts.json
 .DS_Store
 Thumbs.db
 
-# Scratch / working notes
-scratch.md
-plan.md
-CHANGE.md
-test.md
-_.png
-README.md
+# working notes
+*.md
+!vscode-extension/README.md
