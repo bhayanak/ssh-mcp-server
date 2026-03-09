@@ -1,6 +1,6 @@
 [project]
 name = "ssh-mcp-server-copilot"
-version = "0.1.1"
+version = "0.1.2"
 description = "Hardened SSH MCP server for VS Code / Copilot Chat — run policy-scoped commands on remote hosts via natural language"
 readme = "README.md"
 license = {text = "MIT"}

@@ -30,4 +30,4 @@ Thumbs.db
 
 # working notes
 *.md
-!vscode-extension/README.md
+!README.md
