@@ -1,0 +1,8 @@
+{
+  "servers": {
+    "ssh-mcp": {
+      "type": "stdio",
+      "command": "ssh-mcp-server"
+    }
+  }
+}

@@ -1,0 +1,37 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Runtime data (generated at runtime, never commit)
+audit_logs/
+cert_data/
+approval_data/
+
+# User-specific config (contains real hostnames/IPs)
+config/hosts.json
+
+# IDE
+.vscode/mcp.json
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Scratch / working notes
+scratch.md
+plan.md
+CHANGE.md
+test.md
+_.png
+README.md

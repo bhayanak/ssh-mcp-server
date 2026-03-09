@@ -1,0 +1,43 @@
+{
+  "name": "ssh-mcp-server",
+  "displayName": "SSH MCP Server",
+  "description": "Hardened SSH operations for VS Code Copilot Chat — run policy-scoped commands on remote hosts via natural language",
+  "version": "0.1.0",
+  "publisher": "bhayanak",
+  "icon": "ssh-mcp-server-logo.png",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/bhayanak/ssh-mcp-server"
+  },
+  "homepage": "https://github.com/bhayanak/ssh-mcp-server",
+  "bugs": {
+    "url": "https://github.com/bhayanak/ssh-mcp-server/issues"
+  },
+  "engines": {
+    "vscode": "^1.96.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "keywords": [
+    "mcp",
+    "ssh",
+    "copilot",
+    "remote",
+    "server",
+    "devops",
+    "sysadmin"
+  ],
+  "contributes": {
+    "mcpServers": {
+      "ssh-mcp": {
+        "type": "stdio",
+        "command": "ssh-mcp-server"
+      }
+    }
+  },
+  "extensionDependencies": [
+    "github.copilot-chat"
+  ]
+}

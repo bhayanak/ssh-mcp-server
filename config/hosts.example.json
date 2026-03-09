@@ -1,0 +1,20 @@
+[
+  {
+    "host_id": "web-server-01",
+    "hostname": "192.168.1.10",
+    "port": 22,
+    "ssh_user": "deploy",
+    "labels": {"env": "production", "role": "web"},
+    "description": "Production web server",
+    "allowed_roles": ["operator", "admin"]
+  },
+  {
+    "host_id": "staging-worker",
+    "hostname": "10.0.0.50",
+    "port": 22,
+    "ssh_user": "admin",
+    "labels": {"env": "staging", "role": "worker"},
+    "description": "Staging worker node",
+    "allowed_roles": ["developer", "operator", "admin"]
+  }
+]

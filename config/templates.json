@@ -1,0 +1,50 @@
+[
+  {
+    "template_id": "service_status",
+    "description": "Check systemd service status",
+    "command": "systemctl status {service}",
+    "allowed_params": {"service": "^[a-zA-Z0-9_.-]+$"},
+    "allowed_roles": ["developer", "operator", "admin"],
+    "timeout_seconds": 15,
+    "risk_level": "low"
+  },
+  {
+    "template_id": "disk_usage",
+    "description": "Show disk usage summary",
+    "command": "df -h",
+    "allowed_params": {},
+    "allowed_roles": ["developer", "operator", "admin"],
+    "timeout_seconds": 10,
+    "risk_level": "low"
+  },
+  {
+    "template_id": "tail_log",
+    "description": "Tail the last N lines of a log file",
+    "command": "tail -n {lines} {log_path}",
+    "allowed_params": {
+      "lines": "^[0-9]{1,5}$",
+      "log_path": "^/var/log/[a-zA-Z0-9_./-]+$"
+    },
+    "allowed_roles": ["operator", "admin"],
+    "timeout_seconds": 15,
+    "risk_level": "low"
+  },
+  {
+    "template_id": "restart_service",
+    "description": "Restart a systemd service",
+    "command": "sudo systemctl restart {service}",
+    "allowed_params": {"service": "^[a-zA-Z0-9_.-]+$"},
+    "allowed_roles": ["operator", "admin"],
+    "timeout_seconds": 30,
+    "risk_level": "high"
+  },
+  {
+    "template_id": "list_processes",
+    "description": "List running processes",
+    "command": "ps aux --sort=-%mem | head -20",
+    "allowed_params": {},
+    "allowed_roles": ["developer", "operator", "admin"],
+    "timeout_seconds": 10,
+    "risk_level": "low"
+  }
+]
