@@ -35,6 +35,41 @@
                 "type": "stdio",
                 "command": "ssh-mcp-server-copilot"
             }
+        },
+        "configuration": {
+            "title": "SSH MCP Server",
+            "properties": {
+                "sshMcp.configDir": {
+                    "type": "string",
+                    "default": "",
+                    "description": "Config directory (default: ~/.ssh-mcp). Maps to SSH_MCP_CONFIG_DIR."
+                },
+                "sshMcp.maxSessions": {
+                    "type": "number",
+                    "default": 10,
+                    "description": "Max simultaneous SSH sessions. Maps to SSH_MCP_MAX_SESSIONS."
+                },
+                "sshMcp.sessionIdleTimeout": {
+                    "type": "number",
+                    "default": 300,
+                    "description": "Idle session timeout in seconds. Maps to SSH_MCP_SESSION_IDLE_TIMEOUT."
+                },
+                "sshMcp.keepaliveInterval": {
+                    "type": "number",
+                    "default": 15,
+                    "description": "SSH keepalive probe interval in seconds. Maps to SSH_MCP_KEEPALIVE_INTERVAL."
+                },
+                "sshMcp.maxBackgroundJobs": {
+                    "type": "number",
+                    "default": 10,
+                    "description": "Max concurrent background jobs. Maps to SSH_MCP_MAX_BACKGROUND_JOBS."
+                },
+                "sshMcp.requireTwoPartyApproval": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "Require different approver for Tier 2 ops. Maps to SSH_MCP_REQUIRE_TWO_PARTY_APPROVAL."
+                }
+            }
         }
     },
     "extensionDependencies": [

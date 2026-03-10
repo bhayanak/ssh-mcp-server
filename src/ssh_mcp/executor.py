@@ -97,3 +97,48 @@ class SSHExecutor:
             "echo '---OS---' && (cat /etc/os-release 2>/dev/null || sw_vers 2>/dev/null || echo unknown) && "
             "echo '---KERNEL---' && uname -a"
         )
+
+    def run_command_on_client(
+        self,
+        client: paramiko.SSHClient,
+        template: CommandTemplate,
+        params: dict[str, str],
+        *,
+        timeout: int | None = None,
+    ) -> ExecResult:
+        """Execute a template command on an already-connected SSH client.
+
+        Used by session-based execution to avoid reconnecting.
+        """
+        resolved_cmd = template.render(params)
+        effective_timeout = min(
+            timeout or template.timeout_seconds,
+            template.timeout_seconds,
+        )
+
+        t0 = time.monotonic()
+        try:
+            _, stdout_ch, stderr_ch = client.exec_command(
+                resolved_cmd, timeout=effective_timeout
+            )
+            stdout_raw = stdout_ch.read().decode("utf-8", errors="replace")
+            stderr_raw = stderr_ch.read().decode("utf-8", errors="replace")
+            exit_code = stdout_ch.channel.recv_exit_status()
+        except Exception as exc:
+            duration = (time.monotonic() - t0) * 1000
+            return ExecResult(
+                exit_code=-1,
+                stdout="",
+                stderr=redact(str(exc)),
+                duration_ms=duration,
+                redacted=True,
+            )
+
+        duration = (time.monotonic() - t0) * 1000
+        return ExecResult(
+            exit_code=exit_code,
+            stdout=redact(stdout_raw),
+            stderr=redact(stderr_raw),
+            duration_ms=round(duration, 2),
+            redacted=True,
+        )

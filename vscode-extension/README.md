@@ -65,12 +65,28 @@ Open **Copilot Chat** (`Cmd+Shift+I` / `Ctrl+Shift+I`), switch to **Agent mode**
 
 ## Features
 
-- **13 MCP tools** — host discovery, command execution, file transfer, SSH key & certificate management, approval workflows
+- **23 MCP tools** — host discovery, command execution, file transfer, persistent sessions, background jobs, SFTP, SSH key & certificate management, approval workflows
+- **Persistent SSH sessions** — connect once, run multiple commands with keepalive
+- **Background job execution** — start long-running commands, poll output, cancel
+- **Enhanced SFTP** — list, upload, download, and delete remote files
 - **Template-only execution** — no raw shell; every command matches a pre-approved template
 - **3-tier security model** — read-only, confirmation-required, and approval-required operations
 - **Automatic secret redaction** — AWS keys, tokens, passwords scrubbed from output
 - **Tamper-evident audit log** — every operation hash-chained for forensic analysis
 - **Short-lived SSH certificates** — issue/revoke certs with TTL enforcement
+
+## VS Code Settings
+
+Configure the server through VS Code settings (`sshMcp.*`):
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `sshMcp.configDir` | `~/.ssh-mcp` | Config directory path |
+| `sshMcp.maxSessions` | `10` | Max simultaneous SSH sessions |
+| `sshMcp.sessionIdleTimeout` | `300` | Session idle timeout (seconds) |
+| `sshMcp.keepaliveInterval` | `15` | SSH keepalive probe interval (seconds) |
+| `sshMcp.maxBackgroundJobs` | `10` | Max concurrent background jobs |
+| `sshMcp.requireTwoPartyApproval` | `true` | Require different approver for Tier 2 ops |
 
 ## Configuration
 

@@ -12,6 +12,7 @@ import os
 from pathlib import Path
 from typing import Any
 
+import paramiko
 from mcp.server.fastmcp import FastMCP
 
 from .approvals import ApprovalManager
@@ -35,7 +36,9 @@ from .guardrails import (
     require_confirmation,
     wrap_response,
 )
+from .jobs import BackgroundJobManager
 from .redact import redact
+from .sessions import SessionManager
 
 # ---------------------------------------------------------------------------
 # Bootstrap
@@ -54,6 +57,8 @@ _approvals = ApprovalManager(
     _config.approval_data_dir,
     require_two_party=_config.require_two_party_approval,
 )
+_sessions = SessionManager(_config)
+_jobs = BackgroundJobManager(_config)
 
 mcp = FastMCP(
     _config.server_name,
@@ -265,6 +270,7 @@ def run_ssh_command(
     host_id: str,
     template_id: str,
     params: dict[str, str] | None = None,
+    session_id: str = "",
 ) -> dict[str, Any]:
     """Execute a pre-approved command template on a target host.
 
@@ -279,6 +285,8 @@ def run_ssh_command(
     Parameters are validated against per-template regex rules.
     Output is automatically redacted for secrets.
 
+    Pass session_id from ssh_connect to reuse a persistent connection.
+
     Risk level: medium (requires user confirmation in VS Code).
     """
     user = _get_user()
@@ -291,7 +299,13 @@ def run_ssh_command(
     _auth.authorize_command(user, template)
 
     params = params or {}
-    result = _executor.run_command(host, template, params)
+
+    if session_id:
+        # Use persistent session
+        session = _sessions.get_session(session_id, user.user_id)
+        result = _executor.run_command_on_client(session.client, template, params)
+    else:
+        result = _executor.run_command(host, template, params)
 
     audit_id = _audit.log_event(
         "run_ssh_command",
@@ -316,12 +330,17 @@ def transfer_file(
     host_id: str,
     direction: str,
     remote_path: str,
+    local_path: str = "",
     justification: str = "",
+    session_id: str = "",
 ) -> dict[str, Any]:
     """Upload or download a file to/from a remote host.
 
     Enforces path policy, blocked extensions, and size limits.
     Downloads require a justification string.
+    For uploads, provide local_path (the file to upload).
+
+    Pass session_id from ssh_connect to reuse a persistent connection.
 
     Risk level: medium-high (requires user confirmation).
     """
@@ -355,14 +374,42 @@ def transfer_file(
         if not justification.strip():
             raise ValueError("Downloads require a non-empty justification")
 
-    # Actual SFTP transfer
-    import paramiko
+    # Upload validation
+    if direction == "upload":
+        if not local_path.strip():
+            raise ValueError("Upload requires a local_path parameter")
+        local_file = Path(local_path)
+        if ".." in str(local_file):
+            raise ValueError("local_path contains path traversal sequence")
+        if not local_file.exists():
+            raise ValueError(f"Local file not found: {local_path}")
+        if local_file.stat().st_size > policy.max_upload_bytes:
+            raise ValueError(
+                f"File size {local_file.stat().st_size} exceeds upload limit {policy.max_upload_bytes}"
+            )
 
-    client = paramiko.SSHClient()
-    if _config.ssh_known_hosts_file:
-        client.load_host_keys(str(_config.ssh_known_hosts_file))
+    # Use session or ephemeral connection
+    close_after = False
+    if session_id:
+        session_obj = _sessions.get_session(session_id, user.user_id)
+        client = session_obj.client
     else:
-        client.set_missing_host_key_policy(paramiko.RejectPolicy())
+        client = paramiko.SSHClient()
+        if _config.ssh_known_hosts_file:
+            client.load_host_keys(str(_config.ssh_known_hosts_file))
+        else:
+            client.set_missing_host_key_policy(paramiko.RejectPolicy())
+        connect_kwargs: dict[str, Any] = {
+            "hostname": host.hostname,
+            "port": host.port,
+            "timeout": _config.ssh_timeout_seconds,
+            "allow_agent": True,
+            "look_for_keys": True,
+        }
+        if host.ssh_user:
+            connect_kwargs["username"] = host.ssh_user
+        client.connect(**connect_kwargs)
+        close_after = True
 
     status = "ok"
     detail: dict[str, Any] = {
@@ -370,22 +417,12 @@ def transfer_file(
         "remote_path": remote_path,
         "justification": justification,
     }
-    connect_kwargs: dict[str, Any] = {
-        "hostname": host.hostname,
-        "port": host.port,
-        "timeout": _config.ssh_timeout_seconds,
-        "allow_agent": True,
-        "look_for_keys": True,
-    }
-    if host.ssh_user:
-        connect_kwargs["username"] = host.ssh_user
     try:
-        client.connect(**connect_kwargs)
         sftp = client.open_sftp()
         if direction == "upload":
-            # For MVP: upload is a placeholder — needs local path from user
-            detail["note"] = "Upload requires local_path parameter (not yet implemented)"
-            status = "not_implemented"
+            sftp.put(local_path, remote_path)
+            detail["local_path"] = local_path
+            detail["size_bytes"] = Path(local_path).stat().st_size
         else:
             # Check remote file size before downloading
             file_stat = sftp.stat(remote_path)
@@ -402,7 +439,8 @@ def transfer_file(
         status = "error"
         detail["error"] = redact(str(exc))
     finally:
-        client.close()
+        if close_after:
+            client.close()
 
     audit_id = _audit.log_event(
         "transfer_file",
@@ -775,6 +813,382 @@ def list_pending_approvals() -> dict[str, Any]:
         tool="list_pending_approvals",
     )
     return wrap_response("list_pending_approvals", {"pending": items})
+
+
+# ===================================================================
+# Session management tools
+# ===================================================================
+
+
+@mcp.tool()
+def ssh_connect(host_id: str) -> dict[str, Any]:
+    """Open a persistent SSH session to a host.
+
+    Returns a session_id that can be passed to run_ssh_command and
+    transfer_file to reuse the connection.  Sessions have keepalive
+    probes and auto-close after idle timeout.
+
+    Risk level: low.
+    """
+    user = _get_user()
+    host = _require_host(host_id)
+    _auth.authorize_host(user, host)
+
+    session = _sessions.connect(host, user.user_id)
+    _audit.log_event(
+        "ssh_connect",
+        user.user_id,
+        tool="ssh_connect",
+        host_id=host_id,
+        detail={"session_id": session.session_id},
+    )
+    return wrap_response("ssh_connect", {
+        "session_id": session.session_id,
+        "host_id": host_id,
+        "status": "connected",
+        "max_sessions": _sessions.max_sessions,
+        "active_sessions": _sessions.active_count,
+    }, host_id=host_id)
+
+
+@mcp.tool()
+def ssh_disconnect(session_id: str) -> dict[str, Any]:
+    """Close a persistent SSH session.
+
+    Risk level: low.
+    """
+    user = _get_user()
+    _sessions.disconnect(session_id, user.user_id)
+    _audit.log_event(
+        "ssh_disconnect",
+        user.user_id,
+        tool="ssh_disconnect",
+        detail={"session_id": session_id},
+    )
+    return wrap_response("ssh_disconnect", {
+        "session_id": session_id,
+        "status": "disconnected",
+    })
+
+
+@mcp.tool()
+def ssh_list_sessions() -> dict[str, Any]:
+    """List all active SSH sessions and remaining connection slots.
+
+    Risk level: low.
+    """
+    user = _get_user()
+    sessions = _sessions.list_sessions(user.user_id)
+    _audit.log_event(
+        "ssh_list_sessions",
+        user.user_id,
+        tool="ssh_list_sessions",
+    )
+    return wrap_response("ssh_list_sessions", {
+        "sessions": sessions,
+        "active_count": _sessions.active_count,
+        "max_sessions": _sessions.max_sessions,
+    })
+
+
+@mcp.tool()
+def ssh_session_ping(session_id: str) -> dict[str, Any]:
+    """Health-check a persistent SSH session.
+
+    Returns liveness, idle time, and uptime.
+    Risk level: low.
+    """
+    user = _get_user()
+    info = _sessions.ping(session_id, user.user_id)
+    _audit.log_event(
+        "ssh_session_ping",
+        user.user_id,
+        tool="ssh_session_ping",
+        detail={"session_id": session_id},
+    )
+    return wrap_response("ssh_session_ping", info)
+
+
+# ===================================================================
+# Background command execution tools
+# ===================================================================
+
+
+@mcp.tool()
+def run_ssh_command_background(
+    host_id: str,
+    template_id: str,
+    params: dict[str, str] | None = None,
+) -> dict[str, Any]:
+    """Start a template command in the background (non-blocking).
+
+    Returns a job_id immediately. Use poll_background_job to read output,
+    list_background_jobs to see all jobs, or cancel_background_job to stop.
+
+    Same template-only security model as run_ssh_command.
+    Risk level: medium (requires user confirmation).
+    """
+    user = _get_user()
+    check_local_policy("run_ssh_command_background", user.user_id, host_id=host_id)
+
+    host = _require_host(host_id)
+    template = _require_template(template_id)
+
+    _auth.authorize_host(user, host)
+    _auth.authorize_command(user, template)
+
+    params = params or {}
+    job = _jobs.start_job(host, template, params, user.user_id)
+
+    audit_id = _audit.log_event(
+        "run_ssh_command_background",
+        user.user_id,
+        tool="run_ssh_command_background",
+        host_id=host_id,
+        detail={
+            "job_id": job.job_id,
+            "template_id": template_id,
+            "params": params,
+        },
+    )
+    return wrap_response("run_ssh_command_background", {
+        "job_id": job.job_id,
+        "host_id": host_id,
+        "template_id": template_id,
+        "status": "running",
+        "audit_id": audit_id,
+    }, host_id=host_id)
+
+
+@mcp.tool()
+def poll_background_job(job_id: str) -> dict[str, Any]:
+    """Read accumulated output and status of a background job (redacted).
+
+    Returns new stdout since last poll, plus current status and exit code.
+    Risk level: low (read-only).
+    """
+    user = _get_user()
+    result = _jobs.poll_job(job_id, user.user_id)
+    _audit.log_event(
+        "poll_background_job",
+        user.user_id,
+        tool="poll_background_job",
+        detail={"job_id": job_id, "status": result["status"]},
+    )
+    return wrap_response("poll_background_job", result)
+
+
+@mcp.tool()
+def list_background_jobs() -> dict[str, Any]:
+    """List all background jobs (running + completed).
+
+    Risk level: low (read-only).
+    """
+    user = _get_user()
+    jobs = _jobs.list_jobs(user.user_id)
+    _audit.log_event(
+        "list_background_jobs",
+        user.user_id,
+        tool="list_background_jobs",
+    )
+    return wrap_response("list_background_jobs", {"jobs": jobs})
+
+
+@mcp.tool()
+def cancel_background_job(job_id: str) -> dict[str, Any]:
+    """Cancel a running background job.
+
+    Risk level: medium (requires user confirmation).
+    """
+    user = _get_user()
+    check_local_policy("cancel_background_job", user.user_id)
+    result = _jobs.cancel_job(job_id, user.user_id)
+
+    _audit.log_event(
+        "cancel_background_job",
+        user.user_id,
+        tool="cancel_background_job",
+        detail={"job_id": job_id},
+    )
+    return wrap_response("cancel_background_job", result)
+
+
+# ===================================================================
+# Enhanced SFTP tools
+# ===================================================================
+
+
+@mcp.tool()
+def sftp_list_directory(
+    host_id: str,
+    remote_path: str,
+    session_id: str = "",
+) -> dict[str, Any]:
+    """List files and directories at a remote path.
+
+    Only paths within the configured allowed_paths are accessible.
+    Risk level: low (read-only).
+    """
+    user = _get_user()
+    host = _require_host(host_id)
+    _auth.authorize_host(user, host)
+
+    # Block path traversal
+    if ".." in remote_path:
+        raise ValueError("Path contains path traversal sequence")
+
+    policy = _config.transfer_policy
+    if not any(fnmatch.fnmatch(remote_path, pat) or fnmatch.fnmatch(remote_path + "/", pat) or
+               any(fnmatch.fnmatch(remote_path, p.rstrip("*")) or remote_path.startswith(p.rstrip("/*"))
+                   for p in [pat]) for pat in policy.allowed_paths):
+        # Simplified: check if path starts with any allowed path prefix
+        allowed_prefixes = [p.rstrip("/*") for p in policy.allowed_paths]
+        if not any(remote_path.startswith(prefix) for prefix in allowed_prefixes):
+            raise ValueError(f"Path '{remote_path}' not in allowed paths")
+
+    # Use session or ephemeral connection
+    if session_id:
+        session = _sessions.get_session(session_id, user.user_id)
+        client = session.client
+        close_after = False
+    else:
+        client = paramiko.SSHClient()
+        if _config.ssh_known_hosts_file:
+            client.load_host_keys(str(_config.ssh_known_hosts_file))
+        else:
+            client.set_missing_host_key_policy(paramiko.RejectPolicy())
+        connect_kwargs: dict[str, Any] = {
+            "hostname": host.hostname,
+            "port": host.port,
+            "timeout": _config.ssh_timeout_seconds,
+            "allow_agent": True,
+            "look_for_keys": True,
+        }
+        if host.ssh_user:
+            connect_kwargs["username"] = host.ssh_user
+        client.connect(**connect_kwargs)
+        close_after = True
+
+    try:
+        sftp = client.open_sftp()
+        entries = []
+        for attr in sftp.listdir_attr(remote_path):
+            import stat as stat_mod
+            is_dir = stat_mod.S_ISDIR(attr.st_mode) if attr.st_mode else False
+            entries.append({
+                "name": attr.filename,
+                "size": attr.st_size,
+                "is_directory": is_dir,
+                "modified": attr.st_mtime,
+            })
+        sftp.close()
+    except Exception as exc:
+        if close_after:
+            client.close()
+        raise ValueError(f"SFTP error: {redact(str(exc))}") from exc
+
+    if close_after:
+        client.close()
+
+    audit_id = _audit.log_event(
+        "sftp_list_directory",
+        user.user_id,
+        tool="sftp_list_directory",
+        host_id=host_id,
+        detail={"remote_path": remote_path, "entries_count": len(entries)},
+    )
+    return wrap_response("sftp_list_directory", {
+        "remote_path": remote_path,
+        "entries": entries,
+        "count": len(entries),
+        "audit_id": audit_id,
+    }, host_id=host_id)
+
+
+@mcp.tool()
+def sftp_delete(
+    host_id: str,
+    remote_path: str,
+    justification: str = "",
+    session_id: str = "",
+) -> dict[str, Any]:
+    """Delete a remote file via SFTP.
+
+    Only files within allowed_paths can be deleted.
+    Blocked extensions are enforced.
+    Requires a justification.
+    Risk level: medium (requires user confirmation).
+    """
+    user = _get_user()
+    check_local_policy("sftp_delete", user.user_id, host_id=host_id)
+
+    host = _require_host(host_id)
+    _auth.authorize_host(user, host)
+    _auth.check_roles(user, [Role.OPERATOR, Role.ADMIN])
+
+    # Block path traversal
+    if ".." in remote_path:
+        raise ValueError("Path contains path traversal sequence")
+
+    policy = _config.transfer_policy
+    if not any(fnmatch.fnmatch(remote_path, pat) for pat in policy.allowed_paths):
+        raise ValueError(f"Path '{remote_path}' not in allowed paths")
+
+    if not justification.strip():
+        raise ValueError("Justification is required for file deletion")
+
+    # Use session or ephemeral connection
+    if session_id:
+        session = _sessions.get_session(session_id, user.user_id)
+        client = session.client
+        close_after = False
+    else:
+        client = paramiko.SSHClient()
+        if _config.ssh_known_hosts_file:
+            client.load_host_keys(str(_config.ssh_known_hosts_file))
+        else:
+            client.set_missing_host_key_policy(paramiko.RejectPolicy())
+        connect_kwargs: dict[str, Any] = {
+            "hostname": host.hostname,
+            "port": host.port,
+            "timeout": _config.ssh_timeout_seconds,
+            "allow_agent": True,
+            "look_for_keys": True,
+        }
+        if host.ssh_user:
+            connect_kwargs["username"] = host.ssh_user
+        client.connect(**connect_kwargs)
+        close_after = True
+
+    try:
+        sftp = client.open_sftp()
+        sftp.remove(remote_path)
+        sftp.close()
+        status = "deleted"
+    except Exception as exc:
+        status = "error"
+        if close_after:
+            client.close()
+        raise ValueError(f"SFTP delete error: {redact(str(exc))}") from exc
+
+    if close_after:
+        client.close()
+
+    audit_id = _audit.log_event(
+        "sftp_delete",
+        user.user_id,
+        tool="sftp_delete",
+        host_id=host_id,
+        detail={
+            "remote_path": remote_path,
+            "justification": justification,
+        },
+    )
+    return wrap_response("sftp_delete", {
+        "remote_path": remote_path,
+        "status": status,
+        "audit_id": audit_id,
+    }, host_id=host_id)
 
 
 # ===================================================================

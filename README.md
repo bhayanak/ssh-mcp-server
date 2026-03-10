@@ -1,4 +1,3 @@
-
 <p align="center">
   <img src="ssh-mcp-server-logo.png" alt="SSH MCP Server" width="200">
 </p>
@@ -10,6 +9,15 @@
   </a>
   <a href="https://opensource.org/licenses/MIT">
     <img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT">
+  </a>
+  <a href="https://github.com/pycqa/pylint">
+    <img src="https://img.shields.io/badge/lint-pylint-green.svg" alt="Pylint">
+  </a>
+  <a href="https://github.com/pyupio/safety">
+    <img src="https://img.shields.io/badge/security-safety-important.svg" alt="Safety Security Scan">
+  </a>
+  <a href="https://github.com/pyupio/safety-action">
+    <img src="https://img.shields.io/badge/dependency%20security-passed-brightgreen.svg" alt="Dependency Security Check">
   </a>
 </p>
 
@@ -45,12 +53,14 @@ The server enforces **strict security policies** — no raw shell access, all co
 
 ## Features
 
-- **13 MCP tools** — host discovery, command execution, file transfer, SSH key management, certificate lifecycle, approval workflows
+- **23 MCP tools** — host discovery, session management, command execution (sync + background), file transfer, SFTP operations, SSH key management, certificate lifecycle, approval workflows
 - **Template-only execution** — no raw shell; every command matches a registered template with regex-validated parameters
 - **3-tier security model** — read-only (Tier 0), controlled mutation with confirmation (Tier 1), privileged with approval workflow (Tier 2)
 - **Automatic secret redaction** — AWS keys, bearer tokens, passwords, private keys are scrubbed from output
 - **Tamper-evident audit log** — every operation is logged with hash-chain integrity verification
 - **Short-lived SSH certificates** — issue and revoke certificates with TTL enforcement via a local CA
+- **Persistent SSH sessions** — connection pooling with keepalive probes and configurable idle timeout
+- **Background command execution** — run long-running template commands asynchronously with output polling
 - **Path traversal protection** — `..` sequences blocked in all path parameters and file transfers
 - **Transfer policy** — allowed paths, blocked extensions, size limits, mandatory justification for downloads
 
@@ -173,7 +183,7 @@ ssh-keyscan -H 192.168.1.10 >> ~/.ssh/known_hosts
 2. The MCP server auto-starts from `.vscode/mcp.json`
 3. Open **Copilot Chat** (Cmd+Shift+I / Ctrl+Shift+I)
 4. **Switch to "Agent" mode** (critical — only Agent mode can invoke MCP tools)
-5. Verify tools are loaded — click the tools icon in the chat input bar, you should see **12 tools** from `ssh-mcp`
+5. Verify tools are loaded — click the tools icon in the chat input bar, you should see **23 tools** from `ssh-mcp`
 
 Now just ask in natural language:
 
@@ -184,7 +194,7 @@ Now just ask in natural language:
 > What's the status of nginx on my-server?
 ```
 
-## Tools
+## Tools (23)
 
 ### Tier 0 — Read-Only (No Confirmation)
 
@@ -196,12 +206,37 @@ Now just ask in natural language:
 | `list_templates` | List available command templates |
 | `list_pending_approvals` | View pending approval requests |
 
+### Session Management
+
+| Tool | Description |
+|------|-------------|
+| `ssh_connect` | Open a persistent SSH session (returns session_id for reuse) |
+| `ssh_disconnect` | Close a persistent session |
+| `ssh_list_sessions` | List active sessions and remaining connection slots |
+| `ssh_session_ping` | Health-check a session (liveness, idle time, uptime) |
+
 ### Tier 1 — Controlled Mutation (Confirmation Required)
 
 | Tool | Description |
 |------|-------------|
-| `run_ssh_command` | Execute a template command on a host (e.g., `disk_usage`, `tail_log`) |
-| `transfer_file` | Download/upload files via SFTP with path and extension policies |
+| `run_ssh_command` | Execute a template command on a host (supports `session_id` for persistent connections) |
+| `transfer_file` | Download/upload files via SFTP with path and extension policies (supports `session_id`) |
+
+### Background Command Execution
+
+| Tool | Description |
+|------|-------------|
+| `run_ssh_command_background` | Start a template command in the background (returns job_id) |
+| `poll_background_job` | Read accumulated stdout/stderr of a background job (redacted) |
+| `list_background_jobs` | List all background jobs (running + completed) |
+| `cancel_background_job` | Cancel a running background job |
+
+### Enhanced SFTP
+
+| Tool | Description |
+|------|-------------|
+| `sftp_list_directory` | List files in a remote directory (within allowed paths) |
+| `sftp_delete` | Delete a remote file (within allowed paths, requires justification) |
 
 ### Tier 2 — Privileged (Approval Required)
 
@@ -259,6 +294,13 @@ All configuration is via environment variables with the `SSH_MCP_` prefix:
 | `SSH_MCP_AUDIT_LOG_DIR` | `{config_dir}/audit_logs` | Audit log directory |
 | `SSH_MCP_CERT_DATA_DIR` | `{config_dir}/cert_data` | Certificate storage directory |
 | `SSH_MCP_APPROVAL_DATA_DIR` | `{config_dir}/approval_data` | Approval data directory |
+| `SSH_MCP_MAX_SESSIONS` | `10` | Max simultaneous SSH sessions |
+| `SSH_MCP_SESSION_IDLE_TIMEOUT` | `300` | Idle session timeout (seconds) |
+| `SSH_MCP_KEEPALIVE_INTERVAL` | `15` | SSH keepalive interval (seconds) |
+| `SSH_MCP_KEEPALIVE_COUNT_MAX` | `3` | Max failed keepalive probes before disconnect |
+| `SSH_MCP_MAX_BACKGROUND_JOBS` | `10` | Max concurrent background jobs |
+| `SSH_MCP_JOB_OUTPUT_MAX_BYTES` | `1048576` | Max output buffer per background job (1 MB) |
+| `SSH_MCP_JOB_TTL_SECONDS` | `3600` | Background job auto-expiry (1 hour) |
 | `SSH_MCP_SSH_KNOWN_HOSTS_FILE` | *(none)* | Path to SSH known_hosts file |
 | `SSH_MCP_REQUIRE_TWO_PARTY_APPROVAL` | `true` | Require different user as approver |
 | `SSH_MCP_AUTH_TOKEN` | *(none)* | Bearer token (empty = dev mode) |

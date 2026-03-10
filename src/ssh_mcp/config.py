@@ -162,6 +162,17 @@ class ServerConfig(BaseSettings):
     approval_data_dir: Path | None = None
     require_two_party_approval: bool = True
 
+    # Session management
+    max_sessions: int = 10
+    session_idle_timeout: int = 300  # seconds
+    keepalive_interval: int = 15  # seconds
+    keepalive_count_max: int = 3
+
+    # Background jobs
+    max_background_jobs: int = 10
+    job_output_max_bytes: int = 1_048_576  # 1 MB
+    job_ttl_seconds: int = 3600  # 1 hour
+
     # SSH known hosts (for paramiko)
     ssh_known_hosts_file: Path | None = None
     ssh_timeout_seconds: int = 30
