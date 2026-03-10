@@ -24,6 +24,8 @@ from typing import Any
 
 
 class RiskLevel(str, Enum):
+    """Security risk level for tool operations."""
+
     LOW = "low"
     MEDIUM = "medium"
     HIGH = "high"

@@ -2,7 +2,7 @@
     "name": "ssh-mcp-server-secure",
     "displayName": "SSH MCP Server with security enhancements",
     "description": "Hardened SSH operations for VS Code Copilot Chat — run policy-scoped commands on remote hosts via natural language",
-    "version": "0.1.2",
+    "version": "0.1.3",
     "publisher": "bhayanak",
     "icon": "ssh-mcp-server-logo.png",
     "license": "MIT",

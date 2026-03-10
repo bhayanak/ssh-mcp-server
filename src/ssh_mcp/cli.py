@@ -11,9 +11,7 @@ from __future__ import annotations
 import argparse
 import importlib.metadata
 import importlib.resources
-import json
 import shutil
-import sys
 from pathlib import Path
 
 from .config import default_config_dir
@@ -64,32 +62,39 @@ def cmd_init(args: argparse.Namespace) -> None:
         p.mkdir(exist_ok=True)
         print(f"  Created {p}/")
 
+    # Detect the installed binary path for mcp.json snippets
+    bin_path = shutil.which("ssh-mcp-server-copilot") or "ssh-mcp-server-copilot"
+
     print()
     print("Next steps:")
     print(f"  1. Edit {hosts_path} with your real servers")
-    print(f"  2. Ensure ssh-agent is running: eval \"$(ssh-agent -s)\" && ssh-add")
-    print(f"  3. Add to any VS Code project's .vscode/mcp.json:")
+    print("  2. Ensure ssh-agent is running: eval \"$(ssh-agent -s)\" && ssh-add")
+    print("  3. Add to your VS Code project's .vscode/mcp.json:")
     print()
     print('     {')
     print('       "servers": {')
     print('         "ssh-mcp": {')
     print('           "type": "stdio",')
-    print('           "command": "ssh-mcp-server-copilot"')
+    print(f'           "command": "{bin_path}"')
     print('         }')
     print('       }')
     print('     }')
     print()
-    print("  Or enable globally \u2014 add to VS Code User Settings (JSON):")
+    print("  Or enable globally — add to VS Code User Settings (JSON):")
     print()
     print('     "mcp": {')
     print('       "servers": {')
     print('         "ssh-mcp": {')
     print('           "type": "stdio",')
-    print('           "command": "ssh-mcp-server-copilot"')
+    print(f'           "command": "{bin_path}"')
     print('         }')
     print('       }')
     print('     }')
     print()
+    if bin_path != "ssh-mcp-server-copilot":
+        print(f"  NOTE: Using full path because the binary is in: {bin_path}")
+        print("  To use the short name, install globally: pipx install ssh-mcp-server-copilot")
+        print()
     print("  4. Open Copilot Chat in Agent mode and start asking!")
 
 

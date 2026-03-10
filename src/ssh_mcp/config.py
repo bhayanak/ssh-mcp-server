@@ -5,7 +5,6 @@ from __future__ import annotations
 import re
 from enum import Enum
 from pathlib import Path
-from typing import Annotated
 
 from pydantic import BaseModel, Field, model_validator
 from pydantic_settings import BaseSettings
@@ -22,6 +21,7 @@ def default_config_dir() -> Path:
 
 
 class Role(str, Enum):
+    """User roles for RBAC."""
     DEVELOPER = "developer"
     OPERATOR = "operator"
     AUDITOR = "auditor"
@@ -34,6 +34,8 @@ class Role(str, Enum):
 
 
 class HostEntry(BaseModel):
+    """SSH host definition."""
+
     host_id: str = Field(..., pattern=r"^[a-zA-Z0-9._-]+$")
     hostname: str
     port: int = 22
@@ -49,6 +51,8 @@ class HostEntry(BaseModel):
 
 
 class CommandTemplate(BaseModel):
+    """Allowed command template with parameter validation."""
+
     template_id: str = Field(..., pattern=r"^[a-z0-9_]+$")
     description: str
     command: str  # e.g. "systemctl status {service}"
@@ -83,6 +87,8 @@ class CommandTemplate(BaseModel):
 
 
 class TransferPolicy(BaseModel):
+    """File transfer policy constraints."""
+
     max_upload_bytes: int = Field(default=50 * 1024 * 1024, ge=0)  # 50 MB
     max_download_bytes: int = Field(default=50 * 1024 * 1024, ge=0)
     allowed_paths: list[str] = ["/tmp/*", "/var/log/*"]
@@ -96,6 +102,8 @@ class TransferPolicy(BaseModel):
 
 
 class KeyPolicy(BaseModel):
+    """SSH key management policy."""
+
     default_ttl_seconds: int = Field(default=86400, ge=60)  # 24h
     max_ttl_seconds: int = Field(default=86400 * 7, ge=60)  # 7d
     min_key_bits: int = 2048
@@ -108,6 +116,8 @@ class KeyPolicy(BaseModel):
 
 
 class RateLimits(BaseModel):
+    """Rate limiting constraints."""
+
     max_requests_per_minute: int = 30
     max_concurrent: int = 5
 
@@ -118,6 +128,8 @@ class RateLimits(BaseModel):
 
 
 class UserIdentity(BaseModel):
+    """Authenticated user identity from auth token."""
+
     user_id: str
     roles: list[Role]
     display_name: str = ""
@@ -129,6 +141,8 @@ class UserIdentity(BaseModel):
 
 
 class ServerConfig(BaseSettings):
+    """Top-level server configuration loaded from env vars."""
+
     model_config = {"env_prefix": "SSH_MCP_"}
 
     server_name: str = "ssh-mcp-server"

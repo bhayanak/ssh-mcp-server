@@ -21,6 +21,7 @@ from .redact import redact
 
 
 class JobStatus(str, Enum):
+    """Background job execution states."""
     RUNNING = "running"
     COMPLETED = "completed"
     FAILED = "failed"

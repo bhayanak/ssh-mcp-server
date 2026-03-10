@@ -13,15 +13,14 @@ import hashlib
 import json
 import time
 import uuid
-from dataclasses import dataclass, field
+import datetime
+from dataclasses import dataclass
 from pathlib import Path
 
+from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
-from cryptography.hazmat.primitives.asymmetric import ec, rsa
-from cryptography.hazmat.primitives.asymmetric.types import (
-    PrivateKeyTypes,
-    PublicKeyTypes,
-)
+from cryptography.hazmat.primitives.asymmetric import ec
+from cryptography.hazmat.primitives.asymmetric.types import PrivateKeyTypes
 from cryptography.x509 import (
     CertificateBuilder,
     Name,
@@ -29,8 +28,6 @@ from cryptography.x509 import (
     random_serial_number,
 )
 from cryptography.x509.oid import NameOID
-from cryptography import x509
-import datetime
 
 
 # ---------------------------------------------------------------------------
@@ -40,6 +37,7 @@ import datetime
 
 @dataclass
 class IssuedCert:
+    """Record of an issued SSH certificate."""
     cert_id: str
     user_id: str
     serial: int

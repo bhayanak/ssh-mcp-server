@@ -6,9 +6,13 @@ for direct VS Code integration.
 
 from __future__ import annotations
 
-import json
+import base64
 import fnmatch
+import json
 import os
+import stat as stat_mod
+import struct
+import uuid
 from pathlib import Path
 from typing import Any
 
@@ -17,23 +21,19 @@ from mcp.server.fastmcp import FastMCP
 
 from .approvals import ApprovalManager
 from .audit import AuditLogger
-from .auth import AuthError, AuthProvider
+from .auth import AuthProvider
 from .certs import CertManager
 from .config import (
     CommandTemplate,
     HostEntry,
-    KeyPolicy,
     Role,
     ServerConfig,
     UserIdentity,
 )
 from .executor import ExecResult, SSHExecutor
 from .guardrails import (
-    PolicyViolation,
-    build_risk_summary,
     check_local_policy,
     require_approval,
-    require_confirmation,
     wrap_response,
 )
 from .jobs import BackgroundJobManager
@@ -384,8 +384,9 @@ def transfer_file(
         if not local_file.exists():
             raise ValueError(f"Local file not found: {local_path}")
         if local_file.stat().st_size > policy.max_upload_bytes:
+            fsize = local_file.stat().st_size
             raise ValueError(
-                f"File size {local_file.stat().st_size} exceeds upload limit {policy.max_upload_bytes}"
+                f"File size {fsize} exceeds upload limit {policy.max_upload_bytes}"
             )
 
     # Use session or ephemeral connection
@@ -502,9 +503,6 @@ def add_ssh_key(
 
     # Check minimum key strength for RSA
     if parts[0] == "ssh-rsa":
-        import base64
-        import struct
-
         try:
             key_data = base64.b64decode(parts[1])
             # RSA key: read exponent length, exponent, then modulus length
@@ -520,8 +518,6 @@ def add_ssh_key(
                 )
         except (struct.error, base64.binascii.Error) as exc:
             raise ValueError(f"Could not parse RSA key: {exc}") from exc
-
-    import uuid
 
     key_id = uuid.uuid4().hex[:12]
 
@@ -1038,13 +1034,9 @@ def sftp_list_directory(
         raise ValueError("Path contains path traversal sequence")
 
     policy = _config.transfer_policy
-    if not any(fnmatch.fnmatch(remote_path, pat) or fnmatch.fnmatch(remote_path + "/", pat) or
-               any(fnmatch.fnmatch(remote_path, p.rstrip("*")) or remote_path.startswith(p.rstrip("/*"))
-                   for p in [pat]) for pat in policy.allowed_paths):
-        # Simplified: check if path starts with any allowed path prefix
-        allowed_prefixes = [p.rstrip("/*") for p in policy.allowed_paths]
-        if not any(remote_path.startswith(prefix) for prefix in allowed_prefixes):
-            raise ValueError(f"Path '{remote_path}' not in allowed paths")
+    allowed_prefixes = [p.rstrip("/*") for p in policy.allowed_paths]
+    if not any(remote_path.startswith(prefix) for prefix in allowed_prefixes):
+        raise ValueError(f"Path '{remote_path}' not in allowed paths")
 
     # Use session or ephemeral connection
     if session_id:
@@ -1073,7 +1065,6 @@ def sftp_list_directory(
         sftp = client.open_sftp()
         entries = []
         for attr in sftp.listdir_attr(remote_path):
-            import stat as stat_mod
             is_dir = stat_mod.S_ISDIR(attr.st_mode) if attr.st_mode else False
             entries.append({
                 "name": attr.filename,

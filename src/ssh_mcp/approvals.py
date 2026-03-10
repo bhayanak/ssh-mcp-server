@@ -31,11 +31,15 @@ from typing import Any
 
 
 class ApprovalMode(str, Enum):
+    """Approval workflow modes."""
+
     SELF_JUSTIFY = "self-justify"
     TWO_PARTY = "two-party"
 
 
 class ApprovalStatus(str, Enum):
+    """Approval request lifecycle states."""
+
     PENDING = "pending"
     APPROVED = "approved"
     DENIED = "denied"
@@ -45,6 +49,8 @@ class ApprovalStatus(str, Enum):
 
 @dataclass
 class ApprovalRequest:
+    """An approval request with its current state."""
+
     request_id: str
     action: str
     requester_id: str
@@ -293,6 +299,7 @@ class ApprovalManager:
         return results
 
     def get_request(self, request_id: str) -> ApprovalRequest | None:
+        """Get a single approval request by ID."""
         req = self._requests.get(request_id)
         if req is None:
             return None

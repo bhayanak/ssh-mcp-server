@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
 import paramiko
@@ -14,6 +14,8 @@ from .redact import redact
 
 @dataclass
 class ExecResult:
+    """Result of an SSH command execution."""
+
     exit_code: int
     stdout: str
     stderr: str
@@ -94,7 +96,8 @@ class SSHExecutor:
         return (
             "echo '---HOSTNAME---' && hostname -f 2>/dev/null || hostname && "
             "echo '---UPTIME---' && uptime && "
-            "echo '---OS---' && (cat /etc/os-release 2>/dev/null || sw_vers 2>/dev/null || echo unknown) && "
+            "echo '---OS---' && "
+            "(cat /etc/os-release 2>/dev/null || sw_vers 2>/dev/null || echo unknown) && "
             "echo '---KERNEL---' && uname -a"
         )
 

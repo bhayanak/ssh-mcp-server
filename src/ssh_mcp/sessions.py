@@ -31,6 +31,7 @@ class SSHSession:
     alive: bool = True
 
     def touch(self) -> None:
+        """Update last-used timestamp."""
         self.last_used_at = time.monotonic()
 
 
@@ -198,9 +199,11 @@ class SessionManager:
 
     @property
     def active_count(self) -> int:
+        """Number of currently alive sessions."""
         with self._lock:
             return sum(1 for s in self._sessions.values() if s.alive)
 
     @property
     def max_sessions(self) -> int:
+        """Configured maximum sessions."""
         return self._max_sessions
