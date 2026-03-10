@@ -64,48 +64,16 @@ The server enforces **strict security policies** — no raw shell access, all co
 
 ---
 
-### Install from PyPI (Recommended — use with any project)
+### Install
 
-```bash
-# Install globally (or use pipx for isolation)
-pip install ssh-mcp-server-copilot
+#### As vscode plugin 
+#### Follow instructions on link:
+https://marketplace.visualstudio.com/items?itemName=bhayanak.ssh-mcp-server-secure
+---
 
-# Initialize config directory (~/.ssh-mcp)
-ssh-mcp-server-copilot init
-```
 
-This creates `~/.ssh-mcp/` with:
-- `hosts.json` — edit with your real servers
-- `templates.json` — pre-configured command templates
-- `audit_logs/`, `cert_data/`, `approval_data/` — runtime directories
-
-**Add to any VS Code project** — create `.vscode/mcp.json`:
-```json
-{
-  "servers": {
-    "ssh-mcp": {
-      "type": "stdio",
-      "command": "ssh-mcp-server-copilot"
-    }
-  }
-}
-```
-
-**Or enable globally** — add to VS Code **User Settings (JSON)** (`Cmd+Shift+P` → "Preferences: Open User Settings (JSON)"):
-```json
-{
-  "mcp": {
-    "servers": {
-      "ssh-mcp": {
-        "type": "stdio",
-        "command": "ssh-mcp-server-copilot"
-      }
-    }
-  }
-}
-```
-
-That's it — the server is now available in every VS Code window.
+Python package:
+https://pypi.org/project/ssh-mcp-server-copilot/
 
 ---
 
